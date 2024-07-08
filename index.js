@@ -92,7 +92,7 @@ const delay = (timeInMinutes) => {
                     }
                 }
 
-                const formattedAmount = amountClaimed.substring(0, amountClaimed.length - 4); // Remove trailing zeros
+                const formattedAmount = (parseInt(amountClaimed) / 1000000).toFixed(6); // Convert to HOT format
                 const hash = callContract.transaction.hash;
 
                 // SEND NOTIFICATION BOT
@@ -100,8 +100,7 @@ const delay = (timeInMinutes) => {
                     try {
                         await bot.sendMessage(
                             userId, 
-                            `Claimed HOT for ${ACCOUNT_ID}\nAmount: ${formattedAmount} HOT\nTx: https://nearblocks.io/id/txns/${hash}`,
-                            { disable_web_page_preview: true }
+                            `Claim Berhasil!\nAkun: ${ACCOUNT_ID}\nJumlah: ${formattedAmount} HOT\nTx: https://nearblocks.io/id/txns/${hash}`
                         );    
                     } catch (error) {
                         console.log(`Send message failed, ${error}`)
