@@ -76,12 +76,16 @@ const delay = (timeInMinutes) => {
                 });
                 const hash = callContract.transaction.hash;
 
+                // GET AMOUNT CLAIMED
+                const amountClaimed = callContract.transaction.actions[0].transfer.amount;
+                const formattedAmount = amountClaimed.substring(0, amountClaimed.length - 4); // Remove trailing zeros
+
                 // SEND NOTIFICATION BOT
                 if (botConfirm.useTelegramBot) {
                     try {
                         await bot.sendMessage(
                             userId, 
-                            `Claimed HOT for ${ACCOUNT_ID}\nTx: https://nearblocks.io/id/txns/${hash}`,
+                            `Claimed ${formattedAmount} HOT for ${ACCOUNT_ID}\nTx: https://nearblocks.io/id/txns/${hash}`,
                             { disable_web_page_preview: true }
                         );    
                     } catch (error) {
