@@ -77,45 +77,50 @@ const delay = (timeInMinutes) => {
                     args: {},
                 });
 
-                if (!callContract || !callContract.transaction || !callContract.transaction.actions || callContract.transaction.actions.length === 0) {
-                    console.error(`Error processing ${ACCOUNT_ID}: Invalid transaction data`);
-                    continue; // Skip to the next iteration
-                }
+                const transactionHash = callContract.transaction.hash;
+                const logs = callContract.receipts_outcome
+                    .map(outcome => outcome.outcome.logs)
+                    .flat();
 
-                // Parse logs for claimed amounts
-                const logs = callContract.receipts_outcome.flatMap(outcome => outcome.outcome.logs);
-                const claimLogs = logs.filter(log => log.includes('EVENT_JSON'));
+                let userAmount = null;
+                let villageAmount = null;
 
-                let claimDetails = [];
-                claimLogs.forEach(log => {
-                    const eventJson = log.split('EVENT_JSON:')[1];
-                    const event = JSON.parse(eventJson);
-                    const ownerData = event.data;
-
-                    ownerData.forEach(data => {
-                        const amount = parseFloat(data.amount) / 1000000; // Convert to HOT
-                        claimDetails.push({
-                            ownerId: data.owner_id,
-                            amount: amount.toFixed(6)
-                        });
-                    });
+                logs.forEach(log => {
+                    if (log.includes("EVENT_JSON")) {
+                        const eventJson = JSON.parse(log.split("EVENT_JSON:")[1]);
+                        if (eventJson.event === "ft_mint") {
+                            eventJson.data.forEach(data => {
+                                if (data.owner_id === ACCOUNT_ID) {
+                                    userAmount = data.amount;
+                                } else if (data.owner_id.includes("village")) {
+                                    villageAmount = data.amount;
+                                }
+                            });
+                        }
+                    }
                 });
 
-                const hash = callContract.transaction.hash;
+                const formatAmount = (amount) => {
+                    return (parseInt(amount, 10) / 1e6).toFixed(6);
+                };
+
+                const formattedUserAmount = userAmount ? formatAmount(userAmount) : "0.000000";
+                const formattedVillageAmount = villageAmount ? formatAmount(villageAmount) : "0.000000";
+
+                console.log(`Claim Berhasil!`);
+                console.log(`Akun: ${ACCOUNT_ID}`);
+                console.log(`Jumlah: ${formattedUserAmount} HOT (for user)`);
+                console.log(`Jumlah: ${formattedVillageAmount} HOT (for village)`);
+                console.log(`Tx: https://nearblocks.io/id/txns/${transactionHash}`);
+                console.log("====");
 
                 // SEND NOTIFICATION BOT
                 if (botConfirm.useTelegramBot) {
-                    let message = `Claimed HOT for ${ACCOUNT_ID}\n*Amount*:\n`;
-                    claimDetails.forEach(detail => {
-                        message += `- ${detail.amount} HOT (for ${detail.ownerId})\n`;
-                    });
-                    message += `\n*Tx*: https://nearblocks.io/id/txns/${hash}`;
-
                     try {
                         await bot.sendMessage(
                             userId,
-                            message,
-                            { parse_mode: "Markdown", disable_web_page_preview: true }
+                            `*Claimed HOT* for ${ACCOUNT_ID} 🔥\n\n*Amount*:\n- ${formattedUserAmount} HOT (for user)\n- ${formattedVillageAmount} HOT (for village)\n\n*Tx*: https://nearblocks.io/id/txns/${transactionHash}`,
+                            { disable_web_page_preview: true, parse_mode: 'Markdown' }
                         );
                     } catch (error) {
                         console.log(`Send message failed, ${error}`)
