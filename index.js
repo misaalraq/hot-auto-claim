@@ -1,127 +1,123 @@
-import { ethers } from "ethers";
-import fs from "fs";
-import dotenv from 'dotenv';
+const { connect, keyStores, KeyPair } = require("near-api-js");
+const { readFileSync } = require("fs");
+const moment = require("moment");
+const prompts = require("prompts");
+const crypto = require("crypto");
+const dotenv = require('dotenv');
 dotenv.config();
 
-// Konfigurasi jaringan
-const rpcUrl = "https://opbnb-mainnet-rpc.bnbchain.org";
-const chainId = 204;
-const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+const TelegramBot = require("node-telegram-bot-api");
 
-// Fungsi untuk mengirim opBNB
-async function sendopBNB(fromPrivateKey, toAddress, amount, delay = 0) {
-    try {
-        // Buat wallet pengirim
-        const senderWallet = new ethers.Wallet(fromPrivateKey, provider);
+// LOAD ENV
+const token = process.env.TELEGRAM_BOT_TOKEN;
+const userId = process.env.TELEGRAM_USER_ID;
 
-        // Periksa saldo pengirim sebelum mengirim
-        const balance = await senderWallet.getBalance();
-        console.log(`Sisa Saldo Pengirim: ${ethers.utils.formatEther(balance)} opBNB`);
+// INIT TELEGRAM BOT
+const bot = new TelegramBot(token);
 
-        // Estimasikan gas price dan gas limit
-        const gasPrice = await provider.getGasPrice();
-        const gasLimit = ethers.utils.hexlify(21000); // Gas limit untuk transfer standar
-        const txCost = gasPrice.mul(gasLimit);
-
-        // Total biaya transaksi (amount + txCost)
-        const totalAmount = ethers.utils.parseEther(amount.toString()).add(txCost);
-
-        // Periksa jika saldo cukup
-        if (balance.lt(totalAmount)) {
-            throw new Error("Saldo tidak cukup untuk mengirim transaksi");
-        }
-
-        // Buat transaksi
-        const tx = {
-            to: toAddress,
-            value: ethers.utils.parseEther(amount.toString()), // Konversi ke wei
-            gasPrice: gasPrice,
-            gasLimit: gasLimit,
-            chainId: chainId,
-        };
-
-        // Tunggu delay (jika ada)
-        if (delay > 0) {
-            console.log(`Menunggu delay selama ${delay} detik...`);
-            await new Promise(resolve => setTimeout(resolve, delay * 1000));
-        }
-
-        // Kirim transaksi
-        const txResponse = await senderWallet.sendTransaction(tx);
-        console.log(`Berhasil Mengirim opBNB ke ${txResponse.hash}`);
-        return txResponse.hash;
-    } catch (error) {
-        console.error(`Error during transaction: ${error.message}`);
-        throw error;
-    }
+// CREATE DELAY IN MILLISECONDS
+const delay = (timeInMinutes) => {
+    return new Promise((resolve) => {
+        return setTimeout(resolve, timeInMinutes * 60 * 1000);
+    });
 }
 
-// Fungsi untuk mengenerate wallet baru
-function generateWallet() {
-    const wallet = ethers.Wallet.createRandom();
-    return {
-        address: wallet.address,
-        privateKey: wallet.privateKey,
-    };
-}
-
-// Simpan wallet ke dalam file .txt tanpa menghapus data sebelumnya
-function saveWalletToFile(wallet, filePath, count) {
-    const walletData = `================Akun Ke ${count}=================\nAddress: ${wallet.address}\nPrivate Key: ${wallet.privateKey}\n\n`;
-    fs.appendFileSync(filePath, walletData, 'utf-8');
-    console.log(`Address dan Private Key disimpan di ${filePath}`);
-}
-
-// Simpan private key ke dalam file privatekey.txt tanpa menghapus data sebelumnya
-function savePrivateKeyToFile(privateKey, filePath) {
-    fs.appendFileSync(filePath, `${privateKey}\n`, 'utf-8');
-    console.log(`Private Key disimpan di ${filePath}`);
-}
-
-// Fungsi untuk mendapatkan private key acak
-function getRandomPrivateKey() {
-    const privateKeys = process.env.PRIVATE_KEY.split(',');
-    const randomIndex = Math.floor(Math.random() * privateKeys.length);
-    return privateKeys[randomIndex];
-}
-
-// Fungsi utama
 (async () => {
-    let count = 1;
+    // IMPORT LIST ACCOUNT
+    const listAccounts = readFileSync("./private.txt", "utf-8")
+        .split("\n")
+        .map((a) => a.trim())
+        .filter((a) => !!a); // Filter out any empty lines
 
+    // CHOOSE DELAY
+    const chooseDelay = await prompts({
+        type: 'select',
+        name: 'time',
+        message: 'Select time for each claim',
+        choices: [
+            {title: '2 hours', value: (2 * 60)},
+            {title: '3 hours', value: (3 * 60)},
+            {title: '4 hours', value: (4 * 60)},
+        ],
+    });
+
+    // USE TELEGRAM BOT CONFIRMATION
+    const botConfirm = await prompts({
+        type: 'confirm',
+        name: 'useTelegramBot',
+        message: 'Use Telegram Bot as Notification?',
+    });
+
+    // CLAIMING PROCESS
     while (true) {
-        // Generate alamat dompet baru untuk penerima
-        const newWallet = generateWallet();
-        const toAddress = newWallet.address;
+        for(const [index, value] of listAccounts.entries()) {
+            const [PRIVATE_KEY, ACCOUNT_ID] = value.split("|");
 
-        console.log(`Address: ${toAddress}`);
-        console.log(`Private Key: ${newWallet.privateKey}`); // Simpan ini jika perlu
-
-        // Simpan wallet baru ke dalam file .txt tanpa menghapus data sebelumnya
-        saveWalletToFile(newWallet, 'result.txt', count);
-
-        // Simpan private key ke dalam file privatekey.txt tanpa menghapus data sebelumnya
-        savePrivateKeyToFile(newWallet.privateKey, 'privatekey.txt');
-
-        // Jumlah opBNB yang ingin dikirim (dalam ether, sesuaikan jika perlu)
-        const amount = 0.0000035; // ubah sesuai nominal yang diinginkan
-
-        let transactionSuccess = false;
-        while (!transactionSuccess) {
             try {
-                const fromPrivateKey = getRandomPrivateKey(); // Dapatkan private key acak
-                await sendopBNB(fromPrivateKey, toAddress, amount);
-                transactionSuccess = true; // Berhasil mengirim transaksi, lanjut ke wallet berikutnya
+                const myKeyStore = new keyStores.InMemoryKeyStore();
+                const keyPair = KeyPair.fromString(PRIVATE_KEY);
+                await myKeyStore.setKey("mainnet", ACCOUNT_ID, keyPair);
+
+                const connection = await connect({
+                    networkId: "mainnet",
+                    nodeUrl: "https://rpc.mainnet.near.org",
+                    keyStore: myKeyStore,
+                });
+
+                const wallet = await connection.account(ACCOUNT_ID);
+
+                console.log(
+                    `[${moment().format("HH:mm:ss")}] Claiming ${ACCOUNT_ID}`
+                );
+
+                // CALL CONTRACT AND GET THE TX HASH
+                const callContract = await wallet.functionCall({
+                    contractId: "game.hot.tg",
+                    methodName: "claim",
+                    args: {},
+                });
+
+                if (!callContract || !callContract.transaction || !callContract.transaction.actions || callContract.transaction.actions.length === 0) {
+                    console.error(`Error processing ${ACCOUNT_ID}: Invalid transaction data`);
+                    continue; // Skip to the next iteration
+                }
+
+                // Get amount claimed
+                const actions = callContract.transaction.actions;
+                let amountClaimed = "unknown";
+                for (const action of actions) {
+                    if (action.transfer && action.transfer.amount) {
+                        amountClaimed = action.transfer.amount;
+                        break; // Found the amount, no need to iterate further
+                    }
+                }
+
+                const formattedAmount = amountClaimed.substring(0, amountClaimed.length - 4); // Remove trailing zeros
+                const hash = callContract.transaction.hash;
+
+                // SEND NOTIFICATION BOT
+                if (botConfirm.useTelegramBot) {
+                    try {
+                        await bot.sendMessage(
+                            userId, 
+                            `Claimed HOT for ${ACCOUNT_ID}\nAmount: ${formattedAmount} HOT\nTx: https://nearblocks.io/id/txns/${hash}`,
+                            { disable_web_page_preview: true }
+                        );    
+                    } catch (error) {
+                        console.log(`Send message failed, ${error}`)
+                    }
+                }
             } catch (error) {
-                console.error(`Error: ${error.message}`);
-                await new Promise(resolve => setTimeout(resolve, 10000)); // Tunggu 10 detik sebelum mencoba lagi
+                console.error(`Error processing ${ACCOUNT_ID}: ${error}`);
             }
         }
 
-        count++; // Increment the count for the next wallet
+        // REDUCE REAL MINUTES WITH RANDOM
+        const randomMinutes = crypto.randomInt(1, 9);
+        const delayMinutes = chooseDelay.time - randomMinutes;
 
-        // Tunggu 30 detik sebelum membuat wallet baru
-        console.log("==================== Menunggu Untuk Akun Berikut nya ====================");
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        console.log(`[ NEXT CLAIM IN ${moment().add(delayMinutes, 'minutes').format("HH:mm:ss")} ]`);
+        await delay(delayMinutes);
     }
+
 })();
