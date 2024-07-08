@@ -51,7 +51,7 @@ const delay = (timeInMinutes) => {
             const [PRIVATE_KEY, ACCOUNT_ID] = value.split("|");
 
             const myKeyStore = new keyStores.InMemoryKeyStore();
-            const keyPair = KeyPair.fromString(PRIVATE_KEY); // Remove 'ed25519:' prefix here
+            const keyPair = KeyPair.fromString(PRIVATE_KEY);
             await myKeyStore.setKey("mainnet", ACCOUNT_ID, keyPair);
 
             const connection = await connect({
