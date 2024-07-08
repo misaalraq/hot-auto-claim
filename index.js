@@ -62,13 +62,8 @@ const delay = (timeInMinutes) => {
             console.log(`Private Key: ${cleanedPrivateKey}`);
             console.log(`Account ID: ${ACCOUNT_ID}`);
 
-            if (!cleanedPrivateKey || !ACCOUNT_ID) {
-                console.error("Invalid private key or account ID");
-                continue;
-            }
-
-            if (cleanedPrivateKey.length !== 64) {
-                console.error("Invalid private key length");
+            if (!cleanedPrivateKey || cleanedPrivateKey.length !== 64) {
+                console.error("Invalid private key length or format");
                 continue;
             }
 
