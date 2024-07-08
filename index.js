@@ -54,23 +54,26 @@ const delay = (timeInMinutes) => {
         for (const [index, value] of listAccounts.entries()) {
             const [PRIVATE_KEY, ACCOUNT_ID] = value.split("|");
 
+            // Remove "ed25519:" prefix if present
+            const cleanedPrivateKey = PRIVATE_KEY.startsWith("ed25519:") ? PRIVATE_KEY.slice(8) : PRIVATE_KEY;
+
             // Log the private key and account ID for debugging
             console.log(`Processing account ${index + 1}:`);
-            console.log(`Private Key: ${PRIVATE_KEY}`);
+            console.log(`Private Key: ${cleanedPrivateKey}`);
             console.log(`Account ID: ${ACCOUNT_ID}`);
 
-            if (!PRIVATE_KEY || !ACCOUNT_ID) {
+            if (!cleanedPrivateKey || !ACCOUNT_ID) {
                 console.error("Invalid private key or account ID");
                 continue;
             }
 
-            if (PRIVATE_KEY.length !== 64 && PRIVATE_KEY.length !== 128) {
+            if (cleanedPrivateKey.length !== 64) {
                 console.error("Invalid private key length");
                 continue;
             }
 
             const myKeyStore = new keyStores.InMemoryKeyStore();
-            const keyPair = KeyPair.fromString(PRIVATE_KEY);
+            const keyPair = KeyPair.fromString(cleanedPrivateKey);
             await myKeyStore.setKey("mainnet", ACCOUNT_ID, keyPair);
 
             const connection = await connect({
