@@ -24,7 +24,11 @@ const delay = (timeInMinutes) => {
     // IMPORT LIST ACCOUNT
     const listAccounts = readFileSync("./private.txt", "utf-8")
         .split("\n")
-        .map((a) => a.trim());
+        .map((a) => a.trim())
+        .filter(Boolean); // filter out empty lines
+
+    // Log the list of accounts for debugging
+    console.log("List of Accounts:", listAccounts);
 
     // CHOOSE DELAY
     const chooseDelay = await prompts({
@@ -32,9 +36,9 @@ const delay = (timeInMinutes) => {
         name: 'time',
         message: 'Select time for each claim',
         choices: [
-            {title: '2 hours', value: (2 * 60)},
-            {title: '3 hours', value: (3 * 60)},
-            {title: '4 hours', value: (4 * 60)},
+            { title: '2 hours', value: (2 * 60) },
+            { title: '3 hours', value: (3 * 60) },
+            { title: '4 hours', value: (4 * 60) },
         ],
     });
 
@@ -47,8 +51,23 @@ const delay = (timeInMinutes) => {
 
     // CLAIMING PROCESS
     while (true) {
-        for(const [index, value] of listAccounts.entries()) {
+        for (const [index, value] of listAccounts.entries()) {
             const [PRIVATE_KEY, ACCOUNT_ID] = value.split("|");
+
+            // Log the private key and account ID for debugging
+            console.log(`Processing account ${index + 1}:`);
+            console.log(`Private Key: ${PRIVATE_KEY}`);
+            console.log(`Account ID: ${ACCOUNT_ID}`);
+
+            if (!PRIVATE_KEY || !ACCOUNT_ID) {
+                console.error("Invalid private key or account ID");
+                continue;
+            }
+
+            if (PRIVATE_KEY.length !== 64 && PRIVATE_KEY.length !== 128) {
+                console.error("Invalid private key length");
+                continue;
+            }
 
             const myKeyStore = new keyStores.InMemoryKeyStore();
             const keyPair = KeyPair.fromString(PRIVATE_KEY);
@@ -63,9 +82,7 @@ const delay = (timeInMinutes) => {
             const wallet = await connection.account(ACCOUNT_ID);
 
             console.log(
-                `[${moment().format("HH:mm:ss")}] [${index + 1}/${
-                    listAccounts.length
-                }] Claiming ${ACCOUNT_ID}`
+                `[${moment().format("HH:mm:ss")}] [${index + 1}/${listAccounts.length}] Claiming ${ACCOUNT_ID}`
             );
 
             // CALL CONTRACT AND GET THE TX HASH
@@ -80,12 +97,12 @@ const delay = (timeInMinutes) => {
             if (botConfirm.useTelegramBot) {
                 try {
                     await bot.sendMessage(
-                        userId, 
+                        userId,
                         `Claimed HOT for ${ACCOUNT_ID}\nTx: https://nearblocks.io/id/txns/${hash}`,
                         { disable_web_page_preview: true }
-                    );    
+                    );
                 } catch (error) {
-                    console.log(`Send message failed, ${error}`)
+                    console.log(`Send message failed, ${error}`);
                 }
             }
         }
@@ -97,6 +114,4 @@ const delay = (timeInMinutes) => {
         console.log(`[ NEXT CLAIM IN ${moment().add(delayMinutes, 'minutes').format("HH:mm:ss")} ]`);
         await delay(delayMinutes);
     }
-
 })();
-
