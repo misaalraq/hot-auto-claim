@@ -35,9 +35,9 @@ const delay = (timeInMinutes) => {
         name: 'time',
         message: 'Select time for each claim',
         choices: [
-            {title: '2 hours', value: (2 * 60)},
-            {title: '3 hours', value: (3 * 60)},
-            {title: '4 hours', value: (4 * 60)},
+            { title: '2 hours', value: (2 * 60) },
+            { title: '3 hours', value: (3 * 60) },
+            { title: '4 hours', value: (4 * 60) },
         ],
     });
 
@@ -50,7 +50,7 @@ const delay = (timeInMinutes) => {
 
     // CLAIMING PROCESS
     while (true) {
-        for(const [index, value] of listAccounts.entries()) {
+        for (const [index, value] of listAccounts.entries()) {
             const [PRIVATE_KEY, ACCOUNT_ID] = value.split("|");
 
             try {
@@ -82,26 +82,41 @@ const delay = (timeInMinutes) => {
                     continue; // Skip to the next iteration
                 }
 
-                // Get amount claimed
-                const actions = callContract.transaction.actions;
-                let amountClaimed = "unknown";
-                for (const action of actions) {
-                    if (action.transfer && action.transfer.amount) {
-                        amountClaimed = action.transfer.amount;
-                        break; // Found the amount, no need to iterate further
-                    }
-                }
+                // Parse logs for claimed amounts
+                const logs = callContract.receipts_outcome.flatMap(outcome => outcome.outcome.logs);
+                const claimLogs = logs.filter(log => log.includes('EVENT_JSON'));
 
-                const formattedAmount = (parseInt(amountClaimed) / 1000000).toFixed(6); // Convert to HOT format
+                let claimDetails = [];
+                claimLogs.forEach(log => {
+                    const eventJson = log.split('EVENT_JSON:')[1];
+                    const event = JSON.parse(eventJson);
+                    const ownerData = event.data;
+
+                    ownerData.forEach(data => {
+                        const amount = parseFloat(data.amount) / 1000000; // Convert to HOT
+                        claimDetails.push({
+                            ownerId: data.owner_id,
+                            amount: amount.toFixed(6)
+                        });
+                    });
+                });
+
                 const hash = callContract.transaction.hash;
 
                 // SEND NOTIFICATION BOT
                 if (botConfirm.useTelegramBot) {
+                    let message = `Claimed HOT for ${ACCOUNT_ID}\n*Amount*:\n`;
+                    claimDetails.forEach(detail => {
+                        message += `- ${detail.amount} HOT (for ${detail.ownerId})\n`;
+                    });
+                    message += `\n*Tx*: https://nearblocks.io/id/txns/${hash}`;
+
                     try {
                         await bot.sendMessage(
-                            userId, 
-                            `Claim Berhasil!\nAkun: ${ACCOUNT_ID}\nJumlah: ${formattedAmount} HOT\nTx: https://nearblocks.io/id/txns/${hash}`
-                        );    
+                            userId,
+                            message,
+                            { parse_mode: "Markdown", disable_web_page_preview: true }
+                        );
                     } catch (error) {
                         console.log(`Send message failed, ${error}`)
                     }
