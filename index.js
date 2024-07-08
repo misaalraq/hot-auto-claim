@@ -24,7 +24,8 @@ const delay = (timeInMinutes) => {
     // IMPORT LIST ACCOUNT
     const listAccounts = readFileSync("./private.txt", "utf-8")
         .split("\n")
-        .map((a) => a.trim());
+        .map((a) => a.trim())
+        .filter((a) => !!a); // Filter out any empty lines
 
     // CHOOSE DELAY
     const chooseDelay = await prompts({
@@ -50,43 +51,45 @@ const delay = (timeInMinutes) => {
         for(const [index, value] of listAccounts.entries()) {
             const [PRIVATE_KEY, ACCOUNT_ID] = value.split("|");
 
-            const myKeyStore = new keyStores.InMemoryKeyStore();
-            const keyPair = KeyPair.fromString(PRIVATE_KEY);
-            await myKeyStore.setKey("mainnet", ACCOUNT_ID, keyPair);
+            try {
+                const myKeyStore = new keyStores.InMemoryKeyStore();
+                const keyPair = KeyPair.fromString(PRIVATE_KEY);
+                await myKeyStore.setKey("mainnet", ACCOUNT_ID, keyPair);
 
-            const connection = await connect({
-                networkId: "mainnet",
-                nodeUrl: "https://rpc.mainnet.near.org",
-                keyStore: myKeyStore,
-            });
+                const connection = await connect({
+                    networkId: "mainnet",
+                    nodeUrl: "https://rpc.mainnet.near.org",
+                    keyStore: myKeyStore,
+                });
 
-            const wallet = await connection.account(ACCOUNT_ID);
+                const wallet = await connection.account(ACCOUNT_ID);
 
-            console.log(
-                `[${moment().format("HH:mm:ss")}] [${index + 1}/${
-                    listAccounts.length
-                }] Claiming ${ACCOUNT_ID}`
-            );
+                console.log(
+                    `[${moment().format("HH:mm:ss")}] Claiming ${ACCOUNT_ID}`
+                );
 
-            // CALL CONTRACT AND GET THE TX HASH
-            const callContract = await wallet.functionCall({
-                contractId: "game.hot.tg",
-                methodName: "claim",
-                args: {},
-            });
-            const hash = callContract.transaction.hash;
+                // CALL CONTRACT AND GET THE TX HASH
+                const callContract = await wallet.functionCall({
+                    contractId: "game.hot.tg",
+                    methodName: "claim",
+                    args: {},
+                });
+                const hash = callContract.transaction.hash;
 
-            // SEND NOTIFICATION BOT
-            if (botConfirm.useTelegramBot) {
-                try {
-                    await bot.sendMessage(
-                        userId, 
-                        `Claimed HOT for ${ACCOUNT_ID}\nTx: https://nearblocks.io/id/txns/${hash}`,
-                        { disable_web_page_preview: true }
-                    );    
-                } catch (error) {
-                    console.log(`Send message failed, ${error}`)
+                // SEND NOTIFICATION BOT
+                if (botConfirm.useTelegramBot) {
+                    try {
+                        await bot.sendMessage(
+                            userId, 
+                            `Claimed HOT for ${ACCOUNT_ID}\nTx: https://nearblocks.io/id/txns/${hash}`,
+                            { disable_web_page_preview: true }
+                        );    
+                    } catch (error) {
+                        console.log(`Send message failed, ${error}`)
+                    }
                 }
+            } catch (error) {
+                console.error(`Error processing ${ACCOUNT_ID}: ${error}`);
             }
         }
 
